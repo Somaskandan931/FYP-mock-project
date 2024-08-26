@@ -15,12 +15,31 @@ def capture_speech_data():
     pitch_variability = np.random.uniform(2, 4)  # Hz (Typical pitch variability range)
     return speech_rate, pitch_variability
 
-def simple_predictor(data):
-    # Simple rule-based prediction
-    if data['Fixation_Duration'] > 350 or data['Saccadic_Amplitude'] < 2 or data['Speech_Rate'] < 120:
-        return 1, 0.7  # ADHD Likely, with 0.7 probability (adjust this as needed)
-    else:
-        return 0, 0.3  # ADHD Unlikely, with 0.3 probability (adjust this as needed)
+def complex_predictor(data):
+    # Define weights for each feature
+    weights = {
+        'Fixation_Duration': 0.4,  # Weight for fixation duration
+        'Saccadic_Amplitude': 0.3,  # Weight for saccadic amplitude
+        'Speech_Rate': 0.3,  # Weight for speech rate
+    }
+    
+    # Calculate weighted scores for each feature
+    score_fixation = max(0, min(1, (data['Fixation_Duration'] - 200) / 400))
+    score_amplitude = max(0, min(1, (5 - data['Saccadic_Amplitude']) / 5))
+    score_speech_rate = max(0, min(1, (160 - data['Speech_Rate']) / 160))
+    
+    # Compute the weighted average score
+    weighted_score = (
+        weights['Fixation_Duration'] * score_fixation +
+        weights['Saccadic_Amplitude'] * score_amplitude +
+        weights['Speech_Rate'] * score_speech_rate
+    )
+    
+    # Determine ADHD likelihood based on the weighted score
+    probability = weighted_score
+    prediction = 1 if probability > 0.5 else 0
+
+    return prediction, probability
 
 def main():
     st.title("Real-Time ADHD Likelihood Prediction While Reading")
