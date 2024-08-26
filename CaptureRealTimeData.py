@@ -1,9 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-import joblib
 import time
 
 # Mock functions to simulate real-time data capture
@@ -18,9 +15,12 @@ def capture_speech_data():
     pitch_variability = np.random.uniform(2, 4)  # Hz (Typical pitch variability range)
     return speech_rate, pitch_variability
 
-# Load the pre-trained model and scaler
-model = joblib.load("C:/Users/somas/PycharmProjects/FYP_mock_project/model_files/random_forest_model.pkl")
-scaler = joblib.load("C:/Users/somas/PycharmProjects/FYP_mock_project/model_files/scaler.pkl")
+def simple_predictor(data):
+    # Simple rule-based prediction
+    if data['Fixation_Duration'] > 350 or data['Saccadic_Amplitude'] < 2 or data['Speech_Rate'] < 120:
+        return 1, 0.7  # ADHD Likely, with 0.7 probability (adjust this as needed)
+    else:
+        return 0, 0.3  # ADHD Unlikely, with 0.3 probability (adjust this as needed)
 
 def main():
     st.title("Real-Time ADHD Likelihood Prediction While Reading")
@@ -90,16 +90,8 @@ def main():
         st.write(f"Speech Rate: {st.session_state.latest_data['Speech_Rate']:.2f} words/min")
         st.write(f"Pitch Variability: {st.session_state.latest_data['Pitch_Variability']:.2f} Hz")
 
-        # Prepare input data for prediction
-        input_data = pd.DataFrame([st.session_state.latest_data])
-
-        # Normalize the input data using the pre-fitted scaler
-        scaled_input_data = scaler.transform(input_data)
-
-        # Predict the likelihood of ADHD
-        prediction_probability = model.predict_proba(scaled_input_data)[0, 1]
-        threshold = 0.6  # Adjust based on model performance and validation
-        prediction = 1 if prediction_probability > threshold else 0
+        # Use the simple predictor to determine ADHD likelihood
+        prediction, prediction_probability = simple_predictor(st.session_state.latest_data)
 
         # Display the prediction and probability
         st.write(f"**Prediction: {'ADHD Likely' if prediction == 1 else 'ADHD Unlikely'}**")
