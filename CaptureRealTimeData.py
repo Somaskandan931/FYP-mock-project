@@ -63,7 +63,7 @@ def main():
             stop_capture()
 
     # Capturing data in real-time simulation
-    if st.session_state.capturing:
+    while st.session_state.capturing:
         st.write("Capturing data... Please continue reading the passage above.")
 
         fixation_duration, saccadic_amplitude, saccadic_velocity = capture_eye_tracking_data()
@@ -78,12 +78,7 @@ def main():
             'Pitch_Variability': pitch_variability
         }
 
-        # Delay to mimic real-time data capture
-        time.sleep(1)  # Simulate single capture for demonstration
-        stop_capture()  # Automatically stop capture for demonstration purposes
-
-    # Display and predict based on the captured data
-    if st.session_state.latest_data:
+        # Display the captured data
         st.write(f"Fixation Duration: {st.session_state.latest_data['Fixation_Duration']:.2f} ms")
         st.write(f"Saccadic Amplitude: {st.session_state.latest_data['Saccadic_Amplitude']:.2f} degrees")
         st.write(f"Saccadic Velocity: {st.session_state.latest_data['Saccadic_Velocity']:.2f} degrees/second")
@@ -96,6 +91,9 @@ def main():
         # Display the prediction and probability
         st.write(f"**Prediction: {'ADHD Likely' if prediction == 1 else 'ADHD Unlikely'}**")
         st.write(f"**Probability of ADHD: {prediction_probability:.2f}**")
+
+        # Delay to mimic real-time data capture
+        time.sleep(1)
 
 if __name__ == "__main__":
     main()
