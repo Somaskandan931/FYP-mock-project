@@ -1,7 +1,9 @@
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import RFE
+from sklearn.pipeline import Pipeline
 import joblib
 import os
 
@@ -40,49 +42,36 @@ y = combined_data['Label_x']  # Assuming Label_x is your target variable for ADH
 # Split the dataset into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Normalize the feature data
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
+# Build a pipeline for feature selection and model training
+pipeline = Pipeline([
+    ('scaler', StandardScaler()),
+    ('feature_selection', RFE(estimator=RandomForestClassifier(random_state=42), n_features_to_select=5)),
+    ('classifier', RandomForestClassifier(random_state=42))
+])
 
-# Initialize and train a RandomForestClassifier
-model = RandomForestClassifier(n_estimators=100, random_state=42)
-model.fit(X_train_scaled, y_train)
-
-# Evaluate the model (optional, for your own analysis)
-y_pred = model.predict(X_test_scaled)
-accuracy = (y_pred == y_test).mean()
-print(f"Model accuracy: {accuracy:.2f}")
-
-# Feature importance analysis
-feature_importances = model.feature_importances_
-for feature, importance in zip(X.columns, feature_importances):
-    print(f"Feature: {feature}, Importance: {importance:.4f}")
-
-# Save the trained model and scaler
-save_dir = "C:/Users/somas/PycharmProjects/FYP_mock_project/model_files"
-os.makedirs(save_dir, exist_ok=True)
-joblib.dump(model, os.path.join(save_dir, 'random_forest_model.pkl'))
-joblib.dump(scaler, os.path.join(save_dir, 'scaler.pkl'))
-
-print("Model and scaler saved successfully.")
-
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.model_selection import GridSearchCV
-
-# Example: Using GridSearch to tune hyperparameters of a GradientBoostingClassifier
+# Define hyperparameter grid for tuning
 param_grid = {
-    'n_estimators': [100, 200],
-    'learning_rate': [0.01, 0.1],
-    'max_depth': [3, 5, 7]
+    'feature_selection__n_features_to_select': [3, 4, 5],
+    'classifier__n_estimators': [100, 200, 300],
+    'classifier__max_depth': [None, 10, 20],
+    'classifier__min_samples_split': [2, 5, 10],
+    'classifier__min_samples_leaf': [1, 2, 4]
 }
 
-grid_search = GridSearchCV(GradientBoostingClassifier(random_state=42), param_grid, cv=5, scoring='accuracy')
-grid_search.fit(X_train_scaled, y_train)
+# Perform GridSearchCV to find the best hyperparameters
+grid_search = GridSearchCV(pipeline, param_grid, cv=5, scoring='accuracy')
+grid_search.fit(X_train, y_train)
 
 best_model = grid_search.best_estimator_
 
 # Evaluate the best model
-y_pred = best_model.predict(X_test_scaled)
+y_pred = best_model.predict(X_test)
 accuracy = (y_pred == y_test).mean()
 print(f"Model accuracy after tuning: {accuracy:.2f}")
+
+# Save the trained model and scaler
+save_dir = "C:/Users/somas/PycharmProjects/FYP_mock_project/model_files"
+os.makedirs(save_dir, exist_ok=True)
+joblib.dump(best_model, os.path.join(save_dir, 'best_random_forest_model.pkl'))
+
+print("Model saved successfully.")
