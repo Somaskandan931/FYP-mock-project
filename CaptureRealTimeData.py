@@ -1,6 +1,5 @@
 import os
 import time
-import av
 import joblib
 import numpy as np
 import speech_recognition as sr
@@ -9,11 +8,10 @@ from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 # Load pre-trained model and scaler
 model_path = 'C:/Users/somas/PycharmProjects/FYP_mock_project/model_files/random_forest_model.pkl'
-scaler_path = 'C:Users/somas/PycharmProjects/FYP_mock_project/model_files/scaler.pkl'
+scaler_path = 'C:/Users/somas/PycharmProjects/FYP_mock_project/model_files/scaler.pkl'
 
 model = joblib.load(model_path)
 scaler = joblib.load(scaler_path)
-
 
 class VideoTransformer(VideoTransformerBase):
     def __init__(self):
@@ -28,7 +26,6 @@ class VideoTransformer(VideoTransformerBase):
     def get_eye_tracking_data(self):
         # Simulate eye-tracking data
         return np.random.rand(), np.random.rand(), np.random.rand()
-
 
 def collect_audio_data():
     recognizer = sr.Recognizer()
@@ -46,7 +43,6 @@ def collect_audio_data():
     except Exception as e:
         st.error(f"Could not process audio: {e}")
         return None, None
-
 
 def main():
     st.title("ADHD Prediction Model")
@@ -114,14 +110,10 @@ def main():
                     st.session_state['data'].append(
                         [fixation_duration, saccadic_amplitude, saccadic_velocity, speech_rate, pitch_variability]
                     )
-            else:
-                st.session_state['capture'] = False
-                st.info("5 minutes are up. Please click 'Stop Reading' to process the data.")
         else:
             st.error("Failed to initialize webcam stream.")
     else:
         st.write("Click 'Start Reading' to begin data capture.")
-
 
 if __name__ == "__main__":
     main()
