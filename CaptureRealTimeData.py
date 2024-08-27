@@ -1,11 +1,11 @@
 import time
-import cv2
 import joblib
 import mediapipe as mp
 import numpy as np
 import pandas as pd
 import speech_recognition as sr
 import streamlit as st
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
 
 # Load the pre-trained model and scaler
 model = joblib.load("C:/Users/somas/PycharmProjects/FYP_mock_project/model_files/random_forest_model.pkl")
@@ -43,6 +43,15 @@ def capture_speech_data():
             speech_rate, pitch_variability = None, None
 
     return speech_rate, pitch_variability
+
+class VideoTransformer(VideoTransformerBase):
+    def __init__(self):
+        self.frame = None
+
+    def transform(self, frame):
+        self.frame = frame.to_ndarray(format="bgr24")
+        fixation_duration, saccadic_amplitude, saccadic_velocity = capture_eye_tracking_data(self.frame)
+        return frame
 
 def main():
     st.title("Real-Time ADHD Likelihood Prediction While Reading")
@@ -84,22 +93,17 @@ def main():
         if st.button("Stop Capture"):
             stop_capture()
 
-    # Webcam setup
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        st.error("Failed to access webcam. Please check your device permissions.")
-        return
+    # Video stream setup
+    webrtc_ctx = webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
 
     # Capturing data in real-time
-    if st.session_state.capturing:
+    if st.session_state.capturing and webrtc_ctx.video_transformer:
         st.write("Capturing data... Please continue reading the passage above.")
 
-        while st.session_state.capturing:
-            ret, frame = cap.read()
-            if not ret:
-                st.error("Error capturing frame from webcam.")
-                break
+        video_transformer = webrtc_ctx.video_transformer
+        frame = video_transformer.frame
 
+        if frame is not None:
             fixation_duration, saccadic_amplitude, saccadic_velocity = capture_eye_tracking_data(frame)
             speech_rate, pitch_variability = capture_speech_data()
 
@@ -137,9 +141,6 @@ def main():
 
             # Delay to simulate real-time processing
             time.sleep(1)
-
-        cap.release()
-        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
