@@ -1,14 +1,12 @@
+import os
+import av
+import joblib
+import numpy as np
+import speech_recognition as sr
 import streamlit as st
-import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-import joblib
-import os
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
-import av
-import speech_recognition as sr
-import numpy as np
 
 
 class VideoTransformer(VideoTransformerBase):
