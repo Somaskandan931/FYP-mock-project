@@ -1,165 +1,146 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-import joblib
-import os
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
-import av
-import speech_recognition as sr
-import numpy as np
 import time
 
-def train_model(eye_tracking_data, speech_data):
-    # Merge datasets on Participant_ID
-    combined_data = pd.merge(eye_tracking_data, speech_data, on='Participant_ID')
+import cv2
+import joblib
+import mediapipe as mp
+import numpy as np
+import pandas as pd
+import speech_recognition as sr
+import streamlit as st
 
-    # Features and target variable
-    X = combined_data[['Fixation_Duration', 'Saccadic_Amplitude', 'Saccadic_Velocity', 'Speech_Rate', 'Pitch_Variability']]
-    y = combined_data['Label_x']  # Assuming Label_x is your target variable for ADHD prediction
+# Load the pre-trained model and scaler
+model = joblib.load("C:/Users/somas/PycharmProjects/FYP_mock_project/model_files/random_forest_model.pkl")
+scaler = joblib.load("C:/Users/somas/PycharmProjects/FYP_mock_project/model_files/scaler.pkl")
 
-    # Split the dataset into training and testing sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+# Initialize Mediapipe face detection
+mp_face_detection = mp.solutions.face_detection.FaceDetection(min_detection_confidence=0.5)
 
-    # Normalize the feature data
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
+# Initialize SpeechRecognition
+recognizer = sr.Recognizer()
 
-    # Initialize and train a RandomForestClassifier
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X_train_scaled, y_train)
+def capture_eye_tracking_data(frame):
+    # Process the frame for face detection
+    results = mp_face_detection.process(frame)
 
-    # Evaluate the model
-    y_pred = model.predict(X_test_scaled)
-    accuracy = (y_pred == y_test).mean()
+    if results.detections:
+        # Mock processing to extract features
+        fixation_duration = np.random.uniform(200, 400)
+        saccadic_amplitude = np.random.uniform(1, 5)
+        saccadic_velocity = np.random.uniform(100, 400)
+    else:
+        fixation_duration, saccadic_amplitude, saccadic_velocity = None, None, None
 
-    # Feature importance analysis
-    feature_importances = model.feature_importances_
+    return fixation_duration, saccadic_amplitude, saccadic_velocity
 
-    return model, scaler, accuracy, feature_importances
+def capture_speech_data():
+    with sr.Microphone() as source:
+        recognizer.adjust_for_ambient_noise(source)
+        try:
+            audio = recognizer.listen(source, timeout=5)
+            speech_text = recognizer.recognize_google(audio)
+            speech_rate = len(speech_text.split()) / 60  # Words per minute
+            pitch_variability = np.random.uniform(2, 4)  # Mock pitch variability
+        except sr.UnknownValueError:
+            speech_rate, pitch_variability = None, None
 
-
-def save_model(model, scaler):
-    save_dir = 'model_files'
-    os.makedirs(save_dir, exist_ok=True)
-    joblib.dump(model, os.path.join(save_dir, 'random_forest_model.pkl'))
-    joblib.dump(scaler, os.path.join(save_dir, 'scaler.pkl'))
-    return os.path.join(save_dir, 'random_forest_model.pkl'), os.path.join(save_dir, 'scaler.pkl')
-
-
-class VideoTransformer(VideoTransformerBase):
-    def __init__(self):
-        self.fixation_duration = 0
-        self.saccadic_amplitude = 0
-        self.saccadic_velocity = 0
-
-    def transform(self, frame):
-        img = frame.to_ndarray(format="bgr24")
-
-        # Simulate eye-tracking data
-        self.fixation_duration = np.random.rand()
-        self.saccadic_amplitude = np.random.rand()
-        self.saccadic_velocity = np.random.rand()
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
-
-    def get_eye_tracking_data(self):
-        return self.fixation_duration, self.saccadic_amplitude, self.saccadic_velocity
-
-
-def collect_audio_data():
-    recognizer = sr.Recognizer()
-    mic = sr.Microphone()
-
-    with mic as source:
-        st.info("Calibrating microphone... Please wait.")
-        recognizer.adjust_for_ambient_noise(source, duration=1)
-
-        st.info("Recording... Please read the passage.")
-        audio = recognizer.listen(source, timeout=5)
-
-    try:
-        st.info("Processing audio data...")
-        # Simulate speech data extraction
-        speech_rate = np.random.rand()
-        pitch_variability = np.random.rand()
-        return speech_rate, pitch_variability
-    except Exception as e:
-        st.error(f"Could not process audio: {e}")
-        return None, None
-
+    return speech_rate, pitch_variability
 
 def main():
-    st.title("ADHD Prediction Model")
+    st.title("Real-Time ADHD Likelihood Prediction While Reading")
 
     st.write("""
-    Read the following passage aloud while the application captures data using your webcam and microphone.
+    ### Read the passage below. Real-time data will be captured to predict the likelihood of ADHD.
     """)
 
-    passage = """
-    In a village, there was a wise old man. People from all over came to him with their problems, and he helped them find solutions.
-    One day, a young man came to him with a problem he couldn't solve. The old man listened carefully and then told him a story. 
-    """
-    st.text_area("Reading Passage", passage, height=150)
+    passage = """Once upon a time in a faraway land, there lived a wise old owl. The owl was known throughout the forest for its wisdom and kindness. It spent its days watching over the animals and offering advice to those in need. One day, a young fox approached the owl, seeking guidance on how to find its way home. The owl, with a gentle hoot, pointed the fox in the right direction, and the young fox trotted off happily. The owl watched as the fox disappeared into the woods, knowing that it had helped another creature find its path. 
 
-    # Webcam stream initialization
-    ctx = webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
+    Several months passed, and the seasons began to change. As autumn arrived, the leaves turned golden and fell gently to the ground. The owl, now a bit older, still sat perched on its favorite branch, watching over the forest. One crisp morning, a lost rabbit came hopping along, tears in its eyes. The owl listened patiently as the rabbit explained how it had wandered too far from its burrow. With a knowing nod, the owl gave the rabbit some comforting words and pointed it toward the familiar trails leading back to its home.
 
-    if st.button("Start Capture"):
-        st.write("Capturing data... Please continue reading.")
+    Winter came soon after, bringing snow and cold winds to the forest. The wise owl, prepared for the harsh season, wrapped itself in its warm feathers. But even in the coldest of days, it continued to look after the forest dwellers. It guided the birds to safe nests and showed the deer where to find the last bits of food. Each act of kindness made the owl's heart feel fuller, despite the icy weather.
 
-        # Start capturing video and audio data
-        speech_rate, pitch_variability = collect_audio_data()
+    The months turned again, and spring brought new life to the forest. The trees blossomed, and flowers bloomed across the meadow. The owl, feeling rejuvenated, was visited by many animals that it had helped throughout the year. They came with gifts of gratitude and stories of how the owl’s wisdom had changed their lives. The owl, with a humble smile, listened to each story, grateful for the opportunity to have made a difference.
 
-        if ctx.video_transformer:
-            fixation_duration, saccadic_amplitude, saccadic_velocity = ctx.video_transformer.get_eye_tracking_data()
+    As the sun set on that beautiful spring day, the owl closed its eyes, feeling a deep sense of peace and contentment. It had spent its life in service to others, and now, surrounded by friends and the beauty of the forest, it felt truly at home."""
+    st.text_area("Passage", value=passage, height=200, max_chars=None)
 
-            if speech_rate is not None and pitch_variability is not None:
-                # Combine all features
-                X_new = np.array([[fixation_duration, saccadic_amplitude, saccadic_velocity, speech_rate, pitch_variability]])
+    # Initialize session state variables
+    if "capturing" not in st.session_state:
+        st.session_state.capturing = False
+    if "latest_data" not in st.session_state:
+        st.session_state.latest_data = None
 
-                # Load the saved model and scaler
-                model = joblib.load('model_files/random_forest_model.pkl')
-                scaler = joblib.load('model_files/scaler.pkl')
+    # Define start and stop capture functions
+    def start_capture():
+        st.session_state.capturing = True
 
-                # Scale the input data
-                X_new_scaled = scaler.transform(X_new)
+    def stop_capture():
+        st.session_state.capturing = False
 
-                # Predict ADHD likelihood
-                prediction = model.predict(X_new_scaled)
-                st.write(f"ADHD Prediction: {'Positive' if prediction[0] == 1 else 'Negative'}")
+    # Buttons for controlling data capture
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Start Capture"):
+            start_capture()
+    with col2:
+        if st.button("Stop Capture"):
+            stop_capture()
 
-    st.write("""
-    You can also train the model by uploading synthetic datasets. The datasets should include eye-tracking data and speech data.
-    """)
+    # Webcam setup
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        st.error("Failed to access webcam. Please check your device permissions.")
+        return
 
-    uploaded_eye_tracking_file = st.file_uploader("Upload Eye Tracking Data CSV", type=["csv"])
-    uploaded_speech_file = st.file_uploader("Upload Speech Data CSV", type=["csv"])
+    # Capturing data in real-time
+    if st.session_state.capturing:
+        st.write("Capturing data... Please continue reading the passage above.")
 
-    if uploaded_eye_tracking_file and uploaded_speech_file:
-        eye_tracking_data = pd.read_csv(uploaded_eye_tracking_file)
-        speech_data = pd.read_csv(uploaded_speech_file)
+        while st.session_state.capturing:
+            ret, frame = cap.read()
+            if not ret:
+                st.error("Error capturing frame from webcam.")
+                break
 
-        st.write("Data successfully uploaded!")
+            fixation_duration, saccadic_amplitude, saccadic_velocity = capture_eye_tracking_data(frame)
+            speech_rate, pitch_variability = capture_speech_data()
 
-        model, scaler, accuracy, feature_importances = train_model(eye_tracking_data, speech_data)
+            if None not in (fixation_duration, saccadic_amplitude, saccadic_velocity, speech_rate, pitch_variability):
+                st.session_state.latest_data = {
+                    'Fixation_Duration': fixation_duration,
+                    'Saccadic_Amplitude': saccadic_amplitude,
+                    'Saccadic_Velocity': saccadic_velocity,
+                    'Speech_Rate': speech_rate,
+                    'Pitch_Variability': pitch_variability
+                }
 
-        st.write(f"Model accuracy: {accuracy:.2f}")
+                # Display the real-time data to the user
+                st.write("### Real-Time Data")
+                st.write(f"**Fixation Duration:** {fixation_duration:.2f} ms")
+                st.write(f"**Saccadic Amplitude:** {saccadic_amplitude:.2f} degrees")
+                st.write(f"**Saccadic Velocity:** {saccadic_velocity:.2f} degrees/second")
+                st.write(f"**Speech Rate:** {speech_rate:.2f} words/min")
+                st.write(f"**Pitch Variability:** {pitch_variability:.2f} Hz")
 
-        st.write("Feature Importances:")
-        for feature, importance in zip(
-                ['Fixation_Duration', 'Saccadic_Amplitude', 'Saccadic_Velocity', 'Speech_Rate', 'Pitch_Variability'],
-                feature_importances):
-            st.write(f"Feature: {feature}, Importance: {importance:.4f}")
+                # Prepare input data for prediction
+                input_data = pd.DataFrame([st.session_state.latest_data])
 
-        model_path, scaler_path = save_model(model, scaler)
-        st.write(f"Model and scaler saved successfully.")
-        st.write(f"Model saved at: {model_path}")
-        st.write(f"Scaler saved at: {scaler_path}")
+                # Normalize the input data using the pre-fitted scaler
+                scaled_input_data = scaler.transform(input_data)
 
+                # Predict the likelihood of ADHD
+                prediction_probability = model.predict_proba(scaled_input_data)[0, 1]
+                threshold = 0.6  # Adjust based on model performance and validation
+                prediction = 1 if prediction_probability > threshold else 0
+
+                # Display the prediction and probability
+                st.write(f"**Prediction: {'ADHD Likely' if prediction == 1 else 'ADHD Unlikely'}**")
+                st.write(f"**Probability of ADHD: {prediction_probability:.2f}**")
+
+            # Delay to simulate real-time processing
+            time.sleep(1)
+
+        cap.release()
+        cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     main()
