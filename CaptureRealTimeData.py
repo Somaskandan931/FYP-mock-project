@@ -1,15 +1,22 @@
 import os
+import time
 import av
 import joblib
 import numpy as np
 import speech_recognition as sr
 import streamlit as st
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import StandardScaler
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+from streamlit_webrtc import webrtc_streamer, VideoTransformer
 
 
-class VideoTransformer(VideoTransformerBase):
+# Load pre-trained model and scaler
+model_path = 'C:/Users/somas/PycharmProjects/FYP_mock_project/model_files/random_forest_model.pkl'
+scaler_path = 'C:Users/somas/PycharmProjects/FYP_mock_project/model_files/scaler.pkl'
+
+model = joblib.load(model_path)
+scaler = joblib.load(scaler_path)
+
+
+class VideoTransformer(VideoTransformer):
     def __init__(self):
         self.fixation_duration = np.random.rand()
         self.saccadic_amplitude = np.random.rand()
@@ -17,11 +24,10 @@ class VideoTransformer(VideoTransformerBase):
 
     def transform(self, frame):
         img = frame.to_ndarray(format="bgr24")
-        # Returning the video frame without modification
         return av.VideoFrame.from_ndarray(img, format="bgr24")
 
     def get_eye_tracking_data(self):
-        # Simulate eye-tracking data (replace with actual logic if available)
+        # Simulate eye-tracking data
         return np.random.rand(), np.random.rand(), np.random.rand()
 
 
@@ -34,6 +40,7 @@ def collect_audio_data():
         audio = recognizer.listen(source, timeout=5)
 
     try:
+        # Simulate speech data extraction
         speech_rate = np.random.rand()
         pitch_variability = np.random.rand()
         return speech_rate, pitch_variability
@@ -42,85 +49,71 @@ def collect_audio_data():
         return None, None
 
 
-def train_model(X, y):
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-
-    model = RandomForestClassifier(n_estimators=100, random_state=42)
-    model.fit(X_scaled, y)
-
-    return model, scaler
-
-
-def save_model(model, scaler):
-    save_dir = 'model_files'
-    os.makedirs(save_dir, exist_ok=True)
-    joblib.dump(model, os.path.join(save_dir, 'random_forest_model.pkl'))
-    joblib.dump(scaler, os.path.join(save_dir, 'scaler.pkl'))
-
-
 def main():
     st.title("ADHD Prediction Model")
 
-    st.write("Read the following passage aloud while the application captures data using your webcam and microphone.")
+    st.write("Read the following passage aloud while the application captures data using your webcam and microphone for 5 minutes.")
     passage = """
     Once upon a time in a faraway land, there lived a wise old owl...
     """
     st.text_area("Reading Passage", passage, height=150)
 
-    # Initialize webcam stream
     ctx = webrtc_streamer(key="example", video_processor_factory=VideoTransformer)
 
-    # Initialize session states for capture and data collection
+    start_button = st.button("Start Reading")
+    stop_button = st.button("Stop Reading")
+
     if 'capture' not in st.session_state:
         st.session_state['capture'] = False
         st.session_state['data'] = []
-        st.session_state['labels'] = []
 
-    capture_button = st.button("Start Capture")
-    stop_button = st.button("Stop Capture")
-
-    if capture_button:
+    if start_button:
         st.session_state['capture'] = True
-        st.info("Capturing data... Please continue reading.")
+        st.session_state['start_time'] = time.time()
+        st.info("Data capture started. Please read the passage for 5 minutes.")
 
     if stop_button:
         st.session_state['capture'] = False
-        st.info("Capture stopped.")
-
-        # Convert collected data to DataFrame
+        st.info("Data capture stopped.")
         if st.session_state['data']:
-            st.write("Training model with captured data...")
+            # Convert list to numpy array for model prediction
             data = np.array(st.session_state['data'])
-            labels = np.array(st.session_state['labels'])
-            model, scaler = train_model(data, labels)
-            save_model(model, scaler)
-            st.success("Model trained and saved successfully!")
-        else:
-            st.warning("No data collected to train the model.")
+            data_scaled = scaler.transform(data)
+            predictions = model.predict(data_scaled)
 
-    # Real-time data feedback and collection
+            # Display results
+            for i, prediction in enumerate(predictions):
+                result = 'Positive' if prediction == 1 else 'Negative'
+                st.write(f"Prediction for data point {i+1}: {result}")
+        else:
+            st.warning("No data captured.")
+
     if st.session_state['capture']:
         if ctx.video_processor:
-            fixation_duration, saccadic_amplitude, saccadic_velocity = ctx.video_processor.get_eye_tracking_data()
-            speech_rate, pitch_variability = collect_audio_data()
+            current_time = time.time()
+            elapsed_time = current_time - st.session_state['start_time']
 
-            st.write(f"Fixation Duration: {fixation_duration:.2f}")
-            st.write(f"Saccadic Amplitude: {saccadic_amplitude:.2f}")
-            st.write(f"Saccadic Velocity: {saccadic_velocity:.2f}")
-            st.write(f"Speech Rate: {speech_rate:.2f}")
-            st.write(f"Pitch Variability: {pitch_variability:.2f}")
+            if elapsed_time < 300:  # 5 minutes = 300 seconds
+                fixation_duration, saccadic_amplitude, saccadic_velocity = ctx.video_processor.get_eye_tracking_data()
+                speech_rate, pitch_variability = collect_audio_data()
 
-            # Collect data for training
-            if speech_rate is not None and pitch_variability is not None:
-                st.session_state['data'].append(
-                    [fixation_duration, saccadic_amplitude, saccadic_velocity, speech_rate, pitch_variability])
-                st.session_state['labels'].append(
-                    1 if np.random.rand() > 0.5 else 0)  # Random label, replace with actual logic
+                st.write(f"Fixation Duration: {fixation_duration:.2f}")
+                st.write(f"Saccadic Amplitude: {saccadic_amplitude:.2f}")
+                st.write(f"Saccadic Velocity: {saccadic_velocity:.2f}")
+                st.write(f"Speech Rate: {speech_rate:.2f}")
+                st.write(f"Pitch Variability: {pitch_variability:.2f}")
+
+                if speech_rate is not None and pitch_variability is not None:
+                    st.session_state['data'].append(
+                        [fixation_duration, saccadic_amplitude, saccadic_velocity, speech_rate, pitch_variability]
+                    )
+            else:
+                st.session_state['capture'] = False
+                st.info("5 minutes are up. Please click 'Stop Reading' to process the data.")
         else:
             st.error("Failed to initialize webcam stream.")
     else:
-        st.write("Click 'Start Capture' to begin data capture.")
+        st.write("Click 'Start Reading' to begin data capture.")
 
 
 if __name__ == "__main__":
