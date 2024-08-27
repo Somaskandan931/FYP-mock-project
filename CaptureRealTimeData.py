@@ -1,146 +1,129 @@
-import time
-import joblib
-import mediapipe as mp
-import numpy as np
-import pandas as pd
-import speech_recognition as sr
 import streamlit as st
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+import joblib
+import os
 from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+import av
+import speech_recognition as sr
+import numpy as np
 
-# Load the pre-trained model and scaler
-model = joblib.load("C:/Users/somas/PycharmProjects/FYP_mock_project/model_files/random_forest_model.pkl")
-scaler = joblib.load("C:/Users/somas/PycharmProjects/FYP_mock_project/model_files/scaler.pkl")
-
-# Initialize Mediapipe face detection
-mp_face_detection = mp.solutions.face_detection.FaceDetection(min_detection_confidence=0.5)
-
-# Initialize SpeechRecognition
-recognizer = sr.Recognizer()
-
-def capture_eye_tracking_data(frame):
-    # Process the frame for face detection
-    results = mp_face_detection.process(frame)
-
-    if results.detections:
-        # Mock processing to extract features
-        fixation_duration = np.random.uniform(200, 400)
-        saccadic_amplitude = np.random.uniform(1, 5)
-        saccadic_velocity = np.random.uniform(100, 400)
-    else:
-        fixation_duration, saccadic_amplitude, saccadic_velocity = None, None, None
-
-    return fixation_duration, saccadic_amplitude, saccadic_velocity
-
-def capture_speech_data():
-    with sr.Microphone() as source:
-        recognizer.adjust_for_ambient_noise(source)
-        try:
-            audio = recognizer.listen(source, timeout=5)
-            speech_text = recognizer.recognize_google(audio)
-            speech_rate = len(speech_text.split()) / 60  # Words per minute
-            pitch_variability = np.random.uniform(2, 4)  # Mock pitch variability
-        except sr.UnknownValueError:
-            speech_rate, pitch_variability = None, None
-
-    return speech_rate, pitch_variability
 
 class VideoTransformer(VideoTransformerBase):
     def __init__(self):
-        self.frame = None
+        self.fixation_duration = np.random.rand()
+        self.saccadic_amplitude = np.random.rand()
+        self.saccadic_velocity = np.random.rand()
 
     def transform(self, frame):
-        self.frame = frame.to_ndarray(format="bgr24")
-        fixation_duration, saccadic_amplitude, saccadic_velocity = capture_eye_tracking_data(self.frame)
-        return frame
+        img = frame.to_ndarray(format="bgr24")
+        # Returning the video frame without modification
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+    def get_eye_tracking_data(self):
+        # Simulate eye-tracking data (replace with actual logic if available)
+        return np.random.rand(), np.random.rand(), np.random.rand()
+
+
+def collect_audio_data():
+    recognizer = sr.Recognizer()
+    mic = sr.Microphone()
+
+    with mic as source:
+        recognizer.adjust_for_ambient_noise(source, duration=1)
+        audio = recognizer.listen(source, timeout=5)
+
+    try:
+        speech_rate = np.random.rand()
+        pitch_variability = np.random.rand()
+        return speech_rate, pitch_variability
+    except Exception as e:
+        st.error(f"Could not process audio: {e}")
+        return None, None
+
+
+def train_model(X, y):
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_scaled, y)
+
+    return model, scaler
+
+
+def save_model(model, scaler):
+    save_dir = 'model_files'
+    os.makedirs(save_dir, exist_ok=True)
+    joblib.dump(model, os.path.join(save_dir, 'random_forest_model.pkl'))
+    joblib.dump(scaler, os.path.join(save_dir, 'scaler.pkl'))
+
 
 def main():
-    st.title("Real-Time ADHD Likelihood Prediction While Reading")
+    st.title("ADHD Prediction Model")
 
-    st.write("""
-    ### Read the passage below. Real-time data will be captured to predict the likelihood of ADHD.
-    """)
+    st.write("Read the following passage aloud while the application captures data using your webcam and microphone.")
+    passage = """
+    Once upon a time in a faraway land, there lived a wise old owl...
+    """
+    st.text_area("Reading Passage", passage, height=150)
 
-    passage = """Once upon a time in a faraway land, there lived a wise old owl. The owl was known throughout the forest for its wisdom and kindness. It spent its days watching over the animals and offering advice to those in need. One day, a young fox approached the owl, seeking guidance on how to find its way home. The owl, with a gentle hoot, pointed the fox in the right direction, and the young fox trotted off happily. The owl watched as the fox disappeared into the woods, knowing that it had helped another creature find its path. 
+    # Initialize webcam stream
+    ctx = webrtc_streamer(key="example", video_processor_factory=VideoTransformer)
 
-    Several months passed, and the seasons began to change. As autumn arrived, the leaves turned golden and fell gently to the ground. The owl, now a bit older, still sat perched on its favorite branch, watching over the forest. One crisp morning, a lost rabbit came hopping along, tears in its eyes. The owl listened patiently as the rabbit explained how it had wandered too far from its burrow. With a knowing nod, the owl gave the rabbit some comforting words and pointed it toward the familiar trails leading back to its home.
+    # Initialize session states for capture and data collection
+    if 'capture' not in st.session_state:
+        st.session_state['capture'] = False
+        st.session_state['data'] = []
+        st.session_state['labels'] = []
 
-    Winter came soon after, bringing snow and cold winds to the forest. The wise owl, prepared for the harsh season, wrapped itself in its warm feathers. But even in the coldest of days, it continued to look after the forest dwellers. It guided the birds to safe nests and showed the deer where to find the last bits of food. Each act of kindness made the owl's heart feel fuller, despite the icy weather.
+    capture_button = st.button("Start Capture")
+    stop_button = st.button("Stop Capture")
 
-    The months turned again, and spring brought new life to the forest. The trees blossomed, and flowers bloomed across the meadow. The owl, feeling rejuvenated, was visited by many animals that it had helped throughout the year. They came with gifts of gratitude and stories of how the owl’s wisdom had changed their lives. The owl, with a humble smile, listened to each story, grateful for the opportunity to have made a difference.
+    if capture_button:
+        st.session_state['capture'] = True
+        st.info("Capturing data... Please continue reading.")
 
-    As the sun set on that beautiful spring day, the owl closed its eyes, feeling a deep sense of peace and contentment. It had spent its life in service to others, and now, surrounded by friends and the beauty of the forest, it felt truly at home."""
-    st.text_area("Passage", value=passage, height=200, max_chars=None)
+    if stop_button:
+        st.session_state['capture'] = False
+        st.info("Capture stopped.")
 
-    # Initialize session state variables
-    if "capturing" not in st.session_state:
-        st.session_state.capturing = False
-    if "latest_data" not in st.session_state:
-        st.session_state.latest_data = None
+        # Convert collected data to DataFrame
+        if st.session_state['data']:
+            st.write("Training model with captured data...")
+            data = np.array(st.session_state['data'])
+            labels = np.array(st.session_state['labels'])
+            model, scaler = train_model(data, labels)
+            save_model(model, scaler)
+            st.success("Model trained and saved successfully!")
+        else:
+            st.warning("No data collected to train the model.")
 
-    # Define start and stop capture functions
-    def start_capture():
-        st.session_state.capturing = True
+    # Real-time data feedback and collection
+    if st.session_state['capture']:
+        if ctx.video_processor:
+            fixation_duration, saccadic_amplitude, saccadic_velocity = ctx.video_processor.get_eye_tracking_data()
+            speech_rate, pitch_variability = collect_audio_data()
 
-    def stop_capture():
-        st.session_state.capturing = False
+            st.write(f"Fixation Duration: {fixation_duration:.2f}")
+            st.write(f"Saccadic Amplitude: {saccadic_amplitude:.2f}")
+            st.write(f"Saccadic Velocity: {saccadic_velocity:.2f}")
+            st.write(f"Speech Rate: {speech_rate:.2f}")
+            st.write(f"Pitch Variability: {pitch_variability:.2f}")
 
-    # Buttons for controlling data capture
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Start Capture"):
-            start_capture()
-    with col2:
-        if st.button("Stop Capture"):
-            stop_capture()
+            # Collect data for training
+            if speech_rate is not None and pitch_variability is not None:
+                st.session_state['data'].append(
+                    [fixation_duration, saccadic_amplitude, saccadic_velocity, speech_rate, pitch_variability])
+                st.session_state['labels'].append(
+                    1 if np.random.rand() > 0.5 else 0)  # Random label, replace with actual logic
+        else:
+            st.error("Failed to initialize webcam stream.")
+    else:
+        st.write("Click 'Start Capture' to begin data capture.")
 
-    # Video stream setup
-    webrtc_ctx = webrtc_streamer(key="example", video_transformer_factory=VideoTransformer)
-
-    # Capturing data in real-time
-    if st.session_state.capturing and webrtc_ctx.video_transformer:
-        st.write("Capturing data... Please continue reading the passage above.")
-
-        video_transformer = webrtc_ctx.video_transformer
-        frame = video_transformer.frame
-
-        if frame is not None:
-            fixation_duration, saccadic_amplitude, saccadic_velocity = capture_eye_tracking_data(frame)
-            speech_rate, pitch_variability = capture_speech_data()
-
-            if None not in (fixation_duration, saccadic_amplitude, saccadic_velocity, speech_rate, pitch_variability):
-                st.session_state.latest_data = {
-                    'Fixation_Duration': fixation_duration,
-                    'Saccadic_Amplitude': saccadic_amplitude,
-                    'Saccadic_Velocity': saccadic_velocity,
-                    'Speech_Rate': speech_rate,
-                    'Pitch_Variability': pitch_variability
-                }
-
-                # Display the real-time data to the user
-                st.write("### Real-Time Data")
-                st.write(f"**Fixation Duration:** {fixation_duration:.2f} ms")
-                st.write(f"**Saccadic Amplitude:** {saccadic_amplitude:.2f} degrees")
-                st.write(f"**Saccadic Velocity:** {saccadic_velocity:.2f} degrees/second")
-                st.write(f"**Speech Rate:** {speech_rate:.2f} words/min")
-                st.write(f"**Pitch Variability:** {pitch_variability:.2f} Hz")
-
-                # Prepare input data for prediction
-                input_data = pd.DataFrame([st.session_state.latest_data])
-
-                # Normalize the input data using the pre-fitted scaler
-                scaled_input_data = scaler.transform(input_data)
-
-                # Predict the likelihood of ADHD
-                prediction_probability = model.predict_proba(scaled_input_data)[0, 1]
-                threshold = 0.6  # Adjust based on model performance and validation
-                prediction = 1 if prediction_probability > threshold else 0
-
-                # Display the prediction and probability
-                st.write(f"**Prediction: {'ADHD Likely' if prediction == 1 else 'ADHD Unlikely'}**")
-                st.write(f"**Probability of ADHD: {prediction_probability:.2f}**")
-
-            # Delay to simulate real-time processing
-            time.sleep(1)
 
 if __name__ == "__main__":
     main()
